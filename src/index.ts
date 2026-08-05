@@ -30,14 +30,15 @@ async function main() {
   app.get("/sse", async (req, res) => {
     console.log("Novo cliente conectado via SSE.");
     
-    // Hack: Alguns clientes MCP (como o do Antigravity em Go) falham ao ler URLs
-    // relativas e exigem a URL absoluta com o sessionId. Vamos forçar a URL absoluta.
+    // Hack Definitivo: O cliente Go ignora query parameters.
+    // Vamos interceptar a URL e transforma-la em Absoluta E com Path Parameter!
+    // Exemplo: /messages?sessionId=123 -> https://.../messages/123
     const originalWrite = res.write.bind(res);
     res.write = (chunk: any, encoding: any, callback?: any) => {
       if (typeof chunk === "string" || Buffer.isBuffer(chunk)) {
         let str = chunk.toString();
-        if (str.includes("event: endpoint") && str.includes("data: /messages")) {
-          str = str.replace("data: /messages", "data: https://documentacoessankhya.onrender.com/messages");
+        if (str.includes("event: endpoint") && str.includes("data: /messages?sessionId=")) {
+          str = str.replace("data: /messages?sessionId=", "data: https://documentacoessankhya.onrender.com/messages/");
           return originalWrite(str, encoding, callback);
         }
       }
@@ -46,7 +47,6 @@ async function main() {
 
     const transport = new SSEServerTransport("/messages", res);
     
-    // Armazena no map antes de conectar para evitar race conditions
     transports.set(transport.sessionId, transport);
     console.log(`[SSE] Sessao criada: ${transport.sessionId}. Sessoes ativas: ${transports.size}`);
     
@@ -62,8 +62,8 @@ async function main() {
     });
   });
 
-  app.post("/messages", async (req, res) => {
-    const sessionId = req.query.sessionId as string;
+  app.post("/messages/:sessionId", async (req, res) => {
+    const sessionId = req.params.sessionId;
     const transport = transports.get(sessionId);
     
     if (!transport) {
@@ -71,6 +71,12 @@ async function main() {
       res.status(404).send(`Sessao [${sessionId}] nao encontrada. Ativas: [${activeKeys}]`);
       return;
     }
+    
+    // O SDK internamente verifica se req.query.sessionId === transport.sessionId.
+    // Como transformamos em path parameter, precisamos injetar de volta na query
+    // para enganar a validação interna do SDK!
+    req.query.sessionId = sessionId;
+    
     await transport.handlePostMessage(req, res);
   });
 
