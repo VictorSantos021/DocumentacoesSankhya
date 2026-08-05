@@ -29,11 +29,26 @@ async function main() {
 
   app.get("/sse", async (req, res) => {
     console.log("Novo cliente conectado via SSE.");
-    const pathId = require("crypto").randomUUID();
-    const transport = new SSEServerTransport(`/messages/${pathId}`, res);
     
-    transports.set(pathId, transport);
-    console.log(`[SSE] Sessao criada: ${pathId}. Sessoes ativas: ${transports.size}`);
+    // Hack: Alguns clientes MCP (como o do Antigravity em Go) falham ao ler URLs
+    // relativas e exigem a URL absoluta com o sessionId. Vamos forçar a URL absoluta.
+    const originalWrite = res.write.bind(res);
+    res.write = (chunk: any, encoding: any, callback?: any) => {
+      if (typeof chunk === "string" || Buffer.isBuffer(chunk)) {
+        let str = chunk.toString();
+        if (str.includes("event: endpoint") && str.includes("data: /messages")) {
+          str = str.replace("data: /messages", "data: https://documentacoessankhya.onrender.com/messages");
+          return originalWrite(str, encoding, callback);
+        }
+      }
+      return originalWrite(chunk, encoding, callback);
+    };
+
+    const transport = new SSEServerTransport("/messages", res);
+    
+    // Armazena no map antes de conectar para evitar race conditions
+    transports.set(transport.sessionId, transport);
+    console.log(`[SSE] Sessao criada: ${transport.sessionId}. Sessoes ativas: ${transports.size}`);
     
     try {
       await mcp.server.connect(transport);
@@ -42,19 +57,18 @@ async function main() {
     }
     
     res.on("close", () => {
-      console.log(`Cliente desconectado: ${pathId}`);
-      // Comentado temporariamente para debugar se a sessao esta sendo apagada prematuramente
-      // transports.delete(pathId);
+      console.log(`Cliente desconectado: ${transport.sessionId}`);
+      transports.delete(transport.sessionId);
     });
   });
 
-  app.post("/messages/:pathId", async (req, res) => {
-    const pathId = req.params.pathId;
-    const transport = transports.get(pathId);
+  app.post("/messages", async (req, res) => {
+    const sessionId = req.query.sessionId as string;
+    const transport = transports.get(sessionId);
     
     if (!transport) {
       const activeKeys = Array.from(transports.keys()).join(", ");
-      res.status(404).send(`Sessao [${pathId}] nao encontrada. Ativas: [${activeKeys}]`);
+      res.status(404).send(`Sessao [${sessionId}] nao encontrada. Ativas: [${activeKeys}]`);
       return;
     }
     await transport.handlePostMessage(req, res);
