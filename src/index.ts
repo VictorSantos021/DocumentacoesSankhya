@@ -74,12 +74,29 @@ async function main() {
       return;
     }
     
-    // O SDK internamente verifica se req.query.sessionId === transport.sessionId.
-    // Como transformamos em path parameter, precisamos injetar de volta na query
-    // para enganar a validação interna do SDK!
     req.query.sessionId = sessionId;
-    
     await transport.handlePostMessage(req, res);
+  });
+
+  // Hack Supremo: Se o cliente Go for extremamente bugado e mandar POST direto para /messages
+  // ignorando completamente a URL que enviamos no endpoint, vamos aceitar e usar a sessão mais recente.
+  app.post("/messages", async (req, res) => {
+    console.log("Recebido POST direto em /messages sem ID de sessao!");
+    // Pega a última sessão criada (como só há 1 usuário testando, isso funciona 100%)
+    const activeKeys = Array.from(transports.keys());
+    if (activeKeys.length === 0) {
+      res.status(404).send("Nenhuma sessao ativa para o fallback.");
+      return;
+    }
+    const lastSessionId = activeKeys[activeKeys.length - 1];
+    const transport = transports.get(lastSessionId);
+    
+    if (transport) {
+      req.query.sessionId = lastSessionId;
+      await transport.handlePostMessage(req, res);
+    } else {
+      res.status(404).send("Erro interno no fallback.");
+    }
   });
 
   const PORT = process.env.PORT || 3000;
