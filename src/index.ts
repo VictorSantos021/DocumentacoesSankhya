@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { dataStore } from "./data.js";
@@ -21,6 +22,7 @@ async function main() {
 
   // Configuração do Express para o transporte SSE
   const app = express();
+  app.use(cors());
   app.use(express.json());
 
   // Manteremos as sessões ativas (se suportarmos múltiplos clientes)
