@@ -31,9 +31,15 @@ async function main() {
     console.log("Novo cliente conectado via SSE.");
     const pathId = require("crypto").randomUUID();
     const transport = new SSEServerTransport(`/messages/${pathId}`, res);
-    await mcp.server.connect(transport);
     
     transports.set(pathId, transport);
+    
+    try {
+      await mcp.server.connect(transport);
+    } catch (err) {
+      console.error("Erro ao conectar:", err);
+    }
+    
     res.on("close", () => {
       console.log(`Cliente desconectado: ${pathId}`);
       transports.delete(pathId);
