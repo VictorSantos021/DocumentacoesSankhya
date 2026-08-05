@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { dataStore } from "./data";
+import { dataStore } from "./data.js";
 
 export function registerTools(server: McpServer) {
   server.tool(

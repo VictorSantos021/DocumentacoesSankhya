@@ -1,8 +1,8 @@
 import express from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import { dataStore } from "./data";
-import { registerTools } from "./tools";
+import { dataStore } from "./data.js";
+import { registerTools } from "./tools.js";
 
 async function main() {
   console.log("Inicializando o servidor MCP Sankhya...");
