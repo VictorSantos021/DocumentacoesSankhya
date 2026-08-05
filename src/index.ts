@@ -24,21 +24,32 @@ async function main() {
   const app = express();
   app.use(cors());
 
-  // Manteremos as sessões ativas (se suportarmos múltiplos clientes)
-  let activeTransport: SSEServerTransport | null = null;
+  // Mapa para manter múltiplas sessões (Ex: Inspector e Cursor ao mesmo tempo)
+  const transports = new Map<string, SSEServerTransport>();
 
   app.get("/sse", async (req, res) => {
     console.log("Novo cliente conectado via SSE.");
-    activeTransport = new SSEServerTransport("/messages", res);
-    await mcp.server.connect(activeTransport);
+    const transport = new SSEServerTransport("/messages", res);
+    await mcp.server.connect(transport);
+    
+    if (transport.sessionId) {
+      transports.set(transport.sessionId, transport);
+      res.on("close", () => {
+        console.log(`Cliente desconectado: ${transport.sessionId}`);
+        transports.delete(transport.sessionId);
+      });
+    }
   });
 
   app.post("/messages", async (req, res) => {
-    if (!activeTransport) {
-      res.status(400).send("No active SSE connection.");
+    const sessionId = req.query.sessionId as string;
+    const transport = transports.get(sessionId);
+    
+    if (!transport) {
+      res.status(404).send("Session not found");
       return;
     }
-    await activeTransport.handlePostMessage(req, res);
+    await transport.handlePostMessage(req, res);
   });
 
   const PORT = process.env.PORT || 3000;
