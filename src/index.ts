@@ -38,7 +38,9 @@ async function main() {
       if (typeof chunk === "string" || Buffer.isBuffer(chunk)) {
         let str = chunk.toString();
         if (str.includes("event: endpoint") && str.includes("data: /messages?sessionId=")) {
-          str = str.replace("data: /messages?sessionId=", "data: https://documentacoessankhya.onrender.com/messages/");
+          // Extraímos o ID para usá-lo tanto no Path quanto no Query
+          const id = str.split("sessionId=")[1].trim();
+          str = str.replace(`data: /messages?sessionId=${id}`, `data: https://documentacoessankhya.onrender.com/messages/${id}?sessionId=${id}`);
           return originalWrite(str, encoding, callback);
         }
       }
