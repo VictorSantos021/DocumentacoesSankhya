@@ -33,6 +33,7 @@ async function main() {
     const transport = new SSEServerTransport(`/messages/${pathId}`, res);
     
     transports.set(pathId, transport);
+    console.log(`[SSE] Sessao criada: ${pathId}. Sessoes ativas: ${transports.size}`);
     
     try {
       await mcp.server.connect(transport);
@@ -42,7 +43,8 @@ async function main() {
     
     res.on("close", () => {
       console.log(`Cliente desconectado: ${pathId}`);
-      transports.delete(pathId);
+      // Comentado temporariamente para debugar se a sessao esta sendo apagada prematuramente
+      // transports.delete(pathId);
     });
   });
 
@@ -51,7 +53,8 @@ async function main() {
     const transport = transports.get(pathId);
     
     if (!transport) {
-      res.status(404).send("Session not found");
+      const activeKeys = Array.from(transports.keys()).join(", ");
+      res.status(404).send(`Sessao [${pathId}] nao encontrada. Ativas: [${activeKeys}]`);
       return;
     }
     await transport.handlePostMessage(req, res);
