@@ -29,21 +29,20 @@ async function main() {
 
   app.get("/sse", async (req, res) => {
     console.log("Novo cliente conectado via SSE.");
-    const transport = new SSEServerTransport("/messages", res);
+    const pathId = require("crypto").randomUUID();
+    const transport = new SSEServerTransport(`/messages/${pathId}`, res);
     await mcp.server.connect(transport);
     
-    if (transport.sessionId) {
-      transports.set(transport.sessionId, transport);
-      res.on("close", () => {
-        console.log(`Cliente desconectado: ${transport.sessionId}`);
-        transports.delete(transport.sessionId);
-      });
-    }
+    transports.set(pathId, transport);
+    res.on("close", () => {
+      console.log(`Cliente desconectado: ${pathId}`);
+      transports.delete(pathId);
+    });
   });
 
-  app.post("/messages", async (req, res) => {
-    const sessionId = req.query.sessionId as string;
-    const transport = transports.get(sessionId);
+  app.post("/messages/:pathId", async (req, res) => {
+    const pathId = req.params.pathId;
+    const transport = transports.get(pathId);
     
     if (!transport) {
       res.status(404).send("Session not found");
